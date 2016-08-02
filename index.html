@@ -1,0 +1,412 @@
+<!doctype html>
+<html>
+	<head>
+		<title>8-bit Generative Composer</title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+		<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.3/pako.min.js"></script>
+
+		<style>
+		html
+		{
+			background-color:#000000;
+			color:#fff;
+			font-size:12pt;			
+			font-family:Courier, Sans, sans-serif;
+		}
+
+		
+		.more_button,
+		.commands_button
+		{
+			cursor: pointer;
+			margin-bottom:20px;
+		}
+		
+		a,
+		a:visited
+		{
+			color:#FCC33D;
+		}
+		
+		#input {
+			border: 2px solid white;
+			padding:5px;
+		}
+
+		#code
+		{
+			/*height:240px;*/
+		}
+
+		#code textarea {
+			width:100%;
+		}
+
+		#code textarea,
+		#code button {
+			font-size:12pt;			
+			font-family:Courier, Sans, sans-serif;
+		}
+
+		#error {
+			color: #F92672;
+		}
+		
+		#graph {
+			height:256px;
+			width:100%;
+		}
+
+		.middle
+		{
+			width : 1000px;
+			margin: 20px auto;	
+		}
+
+		.more,
+		.commands 
+		{
+			margin-bottom:20px;
+		}
+
+
+	</style>
+	</head>
+	<body>
+		<div id="code" class="middle">
+			<div id="input" contenteditable value="t*((t>>9|t>>13)&25&t>>6)" >return t*((t>>9|t>>13)&25&t>>6);</div>
+		    <p>
+		    	<button onclick="play()">Play</button><button onclick="stop()">Stop</button><button onclick="rec()">Rec</button>
+			</p>
+			<div id="error" class="errors">
+			</div>
+			<canvas id="graph" width="1000" height="256">
+
+			</canvas>
+
+		</div>
+		<div class="middle">
+			<div class="commands_button">commands:</div>
+			<div class="commands">
+				
+				<dt>Pentatonic tuning ratios</dt>
+				<dd>A(t) = 1</dd>
+				<dd>C(t) = 32/27</dd>
+				<dd>D(t) = 4/3</dd>
+				<dd>E(t) = 3/2</dd>
+				<dd>G(t) = 16/9</dd>
+				<br/>
+				<dt>Functions</dt>
+				<dd>floor(v)</dd>
+				<dd>abs(v)</dd>
+				<dd>zigzag(time,frequency)</dd>
+				<dd>odd(t)</dd>
+				<dd>even(t)</dd>
+				<dd>beats(time,notePattern[,length=8])</dd>
+
+			</div>
+			<div class="more_button">more info:</div>
+			<div class="more">
+				<a href="http://countercomplex.blogspot.com/2011/10/algorithmic-symphonies-from-one-line-of.html">Inspired by the work of @viznut</a>. 
+				For great examples <a href="http://www.youtube.com/watch?v=GtQdIYUtAHg&feature=feedlik">watch these vids</a>
+				<p>by <a href="http://twitter.com/#!/paul_hayes">@paul_hayes</a></p> 
+			</div>
+			<br/>		
+		</div>
+		<script>
+
+		var 
+			A = function(t){ return t; },
+			C = function(t){ return t*32/27; },
+			D = function(t){ return t*4/3; },
+			E = function(t){ return t*3/2; },
+			G = function(t){ return t*16/9; };
+
+			odd = function(t){
+				return (t&1)!=0;
+			}
+
+			even = function(t){
+				return (t&1)==0;
+			}
+
+			var gray = function(t){
+				return t^(t>>1);
+			}
+
+			var zigzag = function(t,freq){ 
+				var f=freq>>1;
+				return Math.abs( ((t+f)%freq)-f); 
+			};
+
+			var beats = function(t,notePattern){
+				length = arguments[2] | 8;
+				return notePattern>>(length-(t%length))&1;
+			}
+
+			var clamp256 = function(t){
+				if( t >= 256 ) return 256;
+				if( t <= 0) return 0;
+				return t;
+			}
+
+			var bufferSize = 1024;
+
+			var abs = Math.abs;
+			var floor = Math.floor;
+
+
+
+		$(document).ready(function() {
+			$('.more_button').click(function(){ $('.more').slideToggle(); });
+			$('.commands_button').click(function(){ $('.commands').slideToggle(); });
+			$('.commands').hide();
+			$('.more').hide();
+		});
+
+		var inputElement = document.getElementById("input");
+		var errorElement = document.getElementById("error");
+
+		// Start off by initializing a new context.
+		context = new (window.AudioContext || window.webkitAudioContext)();
+		canvas = document.getElementById("graph");
+		var ctx = canvas.getContext('2d');
+		var graphData = ctx.createImageData(canvas.width, canvas.height);
+		var tmpGraphData = ctx.createImageData(canvas.width, canvas.height);
+		var tmpPixel = ctx.createImageData(1,1);
+		
+		var n = 0;		
+		var playing = false;
+		var recording = false;
+		if (!context.createGain)
+		  context.createGain = context.createGainNode;
+		if (!context.createDelay)
+		  context.createDelay = context.createDelayNode;
+		if (!context.createScriptProcessor)
+		  context.createScriptProcessor = context.createJavaScriptNode;
+
+
+		if( window.location.hash.indexOf("#b64") == 0 ){
+			var code = pako.inflateRaw( atob( decodeURIComponent( window.location.hash.substr(4) ) ),{'to':'string'} );
+			inputElement.innerText = "return "+code+";";
+		}
+		if( window.location.hash.indexOf("#v3b64") == 0 ){
+			var code = pako.inflateRaw( atob( decodeURIComponent( window.location.hash.substr(6) ) ),{'to':'string'} );
+			inputElement.innerText = code;
+		}
+
+		// shim layer with setTimeout fallback
+		window.requestAnimFrame = (function(){
+		return  window.requestAnimationFrame       || 
+		  window.webkitRequestAnimationFrame || 
+		  window.mozRequestAnimationFrame    || 
+		  window.oRequestAnimationFrame      || 
+		  window.msRequestAnimationFrame     || 
+		  function( callback ){
+		  window.setTimeout(callback, 1000 / 60);
+		};
+		})();
+
+		var play = function(){
+			if( playing ){
+				return;
+			}
+
+			playing = true;
+			n=0;
+		}
+
+		var stop = function(){
+			if( recording ){
+				mediaRecorder.stop();
+				recording = false;
+			}
+			playing = false;
+			n = 0;
+		}
+
+		var rec = function(){
+			if( recording ){
+				return;
+			}
+			mediaRecorder.start();			
+			recording = true;
+			chunks = [];
+			if( !playing ){
+				play();
+			}
+		}
+
+		var saveData = (function () {
+		    var a = document.createElement("a");
+		    document.body.appendChild(a);
+		    a.style = "display: none";
+		    return function (blob, fileName) {
+	    		console.log("saving");
+		        //var json = JSON.stringify(data),
+	            //var blob = new Blob([json], {type: "octet/stream"}),
+	            url = URL.createObjectURL(blob);
+		        a.href = url;
+		        a.download = fileName;
+		        a.click();
+		        setTimeout(function(){
+		        	window.URL.revokeObjectURL(url);		        	
+		        });
+		    };
+		}());
+
+     	var samplePos2graph = function(i){
+     		return ( canvas.width*(i%canvas.height)+Math.floor(i/canvas.height) )<<2;
+     	}
+
+
+		var silentFunc = function(){ return 0; };
+		var f = silentFunc;
+		var buffer = context.createBuffer(1, bufferSize, context.sampleRate);
+		var bufferNode = context.createBufferSource();
+		var scriptNode = context.createScriptProcessor(bufferSize, 1, 1);
+		var chunks = [];
+		bufferNode.loop = true;
+		bufferNode.start();
+		
+		var refeshCalc = function(e){
+     		var code=inputElement.innerText;
+			var oldF = f;
+    		try { 
+	    		eval("f=function(t){ "+code+" }");
+	    		f(0);
+			}
+			catch(e){
+				f = oldF;
+				errorElement.innerText = e.toString();
+				return;
+			}
+			errorElement.innerText = "";
+			console.log("changing hash");
+			window.location.hash = "#v3b64"+btoa( pako.deflateRaw(code,{to:"string"}) );
+
+
+			//var d = graphData.data;
+			//ctx.putImageData(graphData,0,0);
+			draw();
+
+		}
+
+		var draw = function(){
+			var data = graphData.data;
+			var graphSizeInSamples = (data.length>>2);
+			var currentSample = (8000*n/context.sampleRate);
+			var deltaTime = Math.floor( 8000 * (bufferSize) / context.sampleRate );
+			var page = graphSizeInSamples * Math.floor( currentSample / graphSizeInSamples );
+			for(var i=0;i<data.length;i+=4){
+				var t = i>>2;
+				var pos = samplePos2graph(t);
+				var sample = t+page;
+				data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
+				data[pos+3] = 255;
+				if(sample < currentSample && currentSample < (sample+deltaTime)){
+					data[pos] = 255;
+				}
+			}
+			ctx.putImageData(graphData,0,0);
+		}
+
+		input.addEventListener("onchange", refeshCalc );
+		input.addEventListener("onkeyup", refeshCalc );
+		input.addEventListener("input", refeshCalc );
+
+
+		scriptNode.onaudioprocess = function(e){
+			var channel = 0;
+			var outputData = e.outputBuffer.getChannelData(channel);
+    		var lastSample = -1;
+    		var lastOutput = 0;
+    		var lastRawOutput = 0;
+    		var data = graphData.data;
+    		
+    		var deltaTime = Math.floor( 8000 * (outputData.length) / context.sampleRate );
+
+			draw();    	
+
+
+    		for(var i=0;i<outputData.length;i++){
+				//console.log( i );
+
+	    		var resampledTime = Math.floor( 8000 * n / context.sampleRate );
+	    		var t = resampledTime;
+	    		if( !playing ){
+	    			outputData[i] = 0;
+	    		}
+	    		else if( lastSample != resampledTime ){
+	    			var o = f(resampledTime);
+	    			lastRawOutput = o%256;
+		    		lastOutput = outputData[i] = ((o%256)-128)/256;
+		    		/*
+		    		var graphPos = samplePos2graph(resampledTime);
+		    		var lastPos = samplePos2graph(resampledTime-deltaTime);
+		    		if( lastPos >= 0 ){
+			    		data[lastPos] = data[lastPos+1];
+
+		    		}
+		    		data[graphPos] = 255;
+		    		*/
+	    		}
+	    		else {
+	    			outputData[i] = lastOutput;
+
+	    		}
+
+				lastSample = resampledTime;
+	    		//data[resampledTime<<2] = data[(resampledTime<<2)+1] = data[(resampledTime<<2)+2] = lastRawOutput;
+	    		if( playing ){
+	    			n++;
+    			}
+	    			
+    		}
+			//var d = graphData.data;
+
+    		//console.log(outputData);
+		}
+
+		bufferNode.connect(scriptNode);
+		scriptNode.connect(context.destination);
+
+		var dest = context.createMediaStreamDestination();
+     	var mediaRecorder = new MediaRecorder(dest.stream);
+     	mediaRecorder.ondataavailable = function(evt) {
+   			// push each chunk (blobs) in an array
+   			console.log("ondataavailable");
+   			chunks.push(evt.data);
+     	};
+ 		mediaRecorder.onstop = function(evt) {
+       		// Make blob out of our blobs, and open it.
+       		var types = ["audio/webm","audio/ogg"];
+       		var files = ["track.webm","track.ogg"];
+       		var file;
+       		var type;
+
+       		var check = ( MediaRecorder.isTypeSupported || function(type){        			
+       			return MediaRecorder.canRecordMimeType && MediaRecordercanRecordMimeType(type)=="probably" ;       			
+       		} );
+
+       		while( (file=files.pop()) && !check(type=types.pop()) ){
+       			if( types.length == 0 ){
+       				console.error("saving not supported in this browser");
+       				break;
+
+       			}
+       		}
+
+       		var blob = new Blob(chunks, { 'type' : type });
+       		console.log(blob,file);
+       		saveData( blob, file );
+       		//window.location = URL.createObjectURL(blob);
+     	};
+
+
+     	scriptNode.connect(dest);
+		refeshCalc();
+		
+		</script>
+	</body>
+</html>
