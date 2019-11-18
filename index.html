@@ -417,10 +417,9 @@
 	  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
     
 	  ga('create', 'UA-48966337-2', 'auto',{
-      'allowAnchor': true,
-      'location': location.href
+      'allowAnchor': true
     });
-	  ga('send', 'pageview');
+	  ga('send', 'pageview', {'location': location.href});
 
 	</script>
 </html>
