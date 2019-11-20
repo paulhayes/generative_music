@@ -8,7 +8,7 @@
 		<style>
 		html
 		{
-			background-color:#000000;
+			background-color:#1d1c1c;
 			color:#fff;
 			font-size:12pt;			
 			font-family:Courier, Sans, sans-serif;
@@ -74,7 +74,7 @@
 	</head>
 	<body>
 		<div id="code" class="middle">
-			<div id="input" contenteditable value="t*((t>>9|t>>13)&25&t>>6)" >return t*((t>>9|t>>13)&25&t>>6);</div>
+			<div id="input" contenteditable value="t*((t>>9|t>>13)&25&t>>6)" >return (t&(t>>6)+(t<<((t>>11)^((t>>13)+3))|((t>>14%64)+(t>>14)))&(-t>>5));</div>
 		    <p>
 		    	<button onclick="play()">Play</button><button onclick="stop()">Stop</button><button onclick="rec()">Rec</button>
 			</p>
@@ -109,7 +109,7 @@
 			<div class="more">
 				<a href="http://countercomplex.blogspot.com/2011/10/algorithmic-symphonies-from-one-line-of.html">Inspired by the work of @viznut</a>. 
 				For great examples <a href="http://www.youtube.com/watch?v=GtQdIYUtAHg&feature=feedlik">watch these vids</a>
-				<p>by <a href="http://twitter.com/#!/paul_hayes">@paul_hayes</a></p> 
+				<p>by <a href="http://twitter.com/#!/paul_hayes">@paul_hayes</a> <a href="https://github.com/paulhayes">github</a></p> 
 			</div>
 			<br/>		
 		</div>
@@ -224,6 +224,7 @@
 			}
 			playing = false;
 			n = 0;
+      funcChanged = true;
 		}
 
 		var rec = function(){
@@ -267,6 +268,8 @@
 		var bufferNode = context.createBufferSource();
 		var scriptNode = context.createScriptProcessor(bufferSize, 1, 1);
 		var chunks = [];
+		var lastPage = 0;
+		var funcChanged = true;
 		bufferNode.loop = true;
 		bufferNode.start();
 		
@@ -274,8 +277,9 @@
      		var code=inputElement.innerText;
 			var oldF = f;
     		try { 
-	    		eval("f=function(t){ "+code+" }");
-	    		f(0);
+	    		//eval("f=function(t){ "+code+" }");
+	    		f = new Function('t',code);
+          f(0);
 			}
 			catch(e){
 				f = oldF;
@@ -286,7 +290,7 @@
 			console.log("changing hash");
 			window.location.hash = "#v3b64"+btoa( pako.deflateRaw(code,{to:"string"}) );
 
-
+			funcChanged = true;
 			//var d = graphData.data;
 			//ctx.putImageData(graphData,0,0);
 			draw();
@@ -296,20 +300,54 @@
 		var draw = function(){
 			var data = graphData.data;
 			var graphSizeInSamples = (data.length>>2);
-			var currentSample = (8000*n/context.sampleRate);
+			var currentSample = Math.floor(8000*n/context.sampleRate);
 			var deltaTime = Math.floor( 8000 * (bufferSize) / context.sampleRate );
-			var page = graphSizeInSamples * Math.floor( currentSample / graphSizeInSamples );
-			for(var i=0;i<data.length;i+=4){
-				var t = i>>2;
-				var pos = samplePos2graph(t);
-				var sample = t+page;
-				data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
-				data[pos+3] = 255;
-				if(sample < currentSample && currentSample < (sample+deltaTime)){
-					data[pos] = 255;
+			var heightInSamples = canvas.height;
+      var page = Math.floor( currentSample / graphSizeInSamples );
+      var numSamples = data.length>>2;
+			if( funcChanged || ( lastPage != page ) ){
+        
+        //console.log(`currentSample=${currentSample} 0<=t<${numSamples} deltaTime=${deltaTime}` );
+        
+				for(var t=0;t<numSamples;t++){
+          var i = t<<2;
+					var pos = samplePos2graph(t);
+					var sample = t + ( graphSizeInSamples * page );
+					data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
+					data[pos+3] = 255;
+					if(sample < currentSample && currentSample < (sample+heightInSamples)){
+						data[pos] = 255;
+					}
+          
 				}
+
+				funcChanged = false;
+				lastPage = page;
 			}
-			ctx.putImageData(graphData,0,0);
+      else if(playing){
+        var sampleInGraph = Math.floor(currentSample%graphSizeInSamples);
+        var startSample = heightInSamples*Math.floor(-2 + sampleInGraph/heightInSamples );
+        var endSample = heightInSamples*Math.ceil(sampleInGraph/heightInSamples);
+        //console.log(`currentSample=${currentSample} sampleInGraph=${sampleInGraph} ${startSample}<=t<${endSample} deltaTime=${deltaTime}` );
+        for(var t=startSample;t<endSample;t++){
+          
+          var i = t<<2;
+          var pos = samplePos2graph(t);
+          var sample = t + ( graphSizeInSamples * page );
+					data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
+					data[pos+3] = 255;
+					if(sample < currentSample && currentSample < (sample+heightInSamples)){
+						data[pos] = 255;
+					} 
+          
+          
+        }
+      }
+
+      ctx.putImageData(graphData,0,0);
+			
+
+			
 		}
 
 		input.addEventListener("onchange", refeshCalc );
@@ -329,7 +367,8 @@
 
 			draw();    	
 
-
+			var wasZero = true;
+			
     		for(var i=0;i<outputData.length;i++){
 				//console.log( i );
 
@@ -342,6 +381,7 @@
 	    			var o = f(resampledTime);
 	    			lastRawOutput = o%256;
 		    		lastOutput = outputData[i] = ((o%256)-128)/256;
+		    		
 		    		/*
 		    		var graphPos = samplePos2graph(resampledTime);
 		    		var lastPos = samplePos2graph(resampledTime-deltaTime);
@@ -356,17 +396,20 @@
 	    			outputData[i] = lastOutput;
 
 	    		}
-
+	    		wasZero &= ( lastRawOutput==0 );
+	    		
+	    		
 				lastSample = resampledTime;
 	    		//data[resampledTime<<2] = data[(resampledTime<<2)+1] = data[(resampledTime<<2)+2] = lastRawOutput;
 	    		if( playing ){
 	    			n++;
     			}
-	    			
+	    		
     		}
 			//var d = graphData.data;
 
     		//console.log(outputData);
+    		
 		}
 
 		bufferNode.connect(scriptNode);
@@ -399,8 +442,10 @@
        		}
 
        		var blob = new Blob(chunks, { 'type' : type });
-       		console.log(blob,file);
+       		//console.log(blob,file);
        		saveData( blob, file );
+
+          
        		//window.location = URL.createObjectURL(blob);
      	};
 
