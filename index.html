@@ -1,10 +1,11 @@
 <!doctype html>
 <html>
 	<head>
+      <meta charset="UTF-8">
 		<title>8-bit Generative Composer</title>
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
 		<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.3/pako.min.js"></script>
-
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 		<style>
 		html
 		{
@@ -69,6 +70,16 @@
 			margin-bottom:20px;
 		}
 
+    button 
+    {
+      display: inline-block;
+       width:2em;
+       height:2em;
+       text-align: center;
+       vertical-align:middle;
+       padding:2px 0 0 0;
+    }
+
 
 	</style>
 	</head>
@@ -76,8 +87,13 @@
 		<div id="code" class="middle">
 			<div id="input" contenteditable value="t*((t>>9|t>>13)&25&t>>6)" >return (t&(t>>6)+(t<<((t>>11)^((t>>13)+3))|((t>>14%64)+(t>>14)))&(-t>>5));</div>
 		    <p>
-		    	<button onclick="play()">Play</button><button onclick="stop()">Stop</button><button onclick="rec()">Rec</button>
-			</p>
+          <button onclick="prevPage()"><i class="material-icons">navigate_before</i></button>
+          <button onclick="play()"><i id="play_icon" class="material-icons">play_arrow</i></button>
+          <button onclick="stop()"><i id="play_icon" class="material-icons">stop</i></button>
+          <button onclick="rec()" style="color:#f00"><i id="play_icon" class="material-icons">fiber_manual_record</i></button>
+          <button onclick="nextPage()"><i id="play_icon" class="material-icons">navigate_next</i></button>
+          <span style="display: none;" id="pageNumber"></span> time=<span id="timeCode"></span>
+        </p>
 			<div id="error" class="errors">
 			</div>
 			<canvas id="graph" width="1000" height="256">
@@ -183,8 +199,12 @@
 		var tmpPixel = ctx.createImageData(1,1);
 		
 		var n = 0;		
+    var page = 0;
 		var playing = false;
 		var recording = false;
+    var pageNumDiv;
+    var timeCodeDiv;
+
 		if (!context.createGain)
 		  context.createGain = context.createGainNode;
 		if (!context.createDelay)
@@ -216,14 +236,18 @@
 		};
 		})();
 
+    var updatePlayIcon = function(){
+      document.getElementById("play_icon").innerText = playing ? "pause" : "play_arrow";			
+    }
+
 		var play = function(){
-			if( playing ){
-				return;
+      playing = !playing;
+      updatePlayIcon()
+      if( !playing ){
+        return;
 			}
 
       context.resume();
-			playing = true;
-			n=0;
 		}
 
 		var stop = function(){
@@ -231,9 +255,11 @@
 				mediaRecorder.stop();
 				recording = false;
 			}
+      
 			playing = false;
 			n = 0;
       funcChanged = true;
+      updatePlayIcon();
 		}
 
 		var rec = function(){
@@ -246,7 +272,25 @@
 			if( !playing ){
 				play();
 			}
+      updatePlayIcon
 		}
+
+    var nextPage = function(){      
+      var graphSizeInSamples = (graphData.data.length>>2);
+      n += Math.floor(context.sampleRate*graphSizeInSamples/8000);
+      if(!playing)
+        draw();
+    }
+
+    var prevPage = function(){
+      var graphSizeInSamples = (graphData.data.length>>2);
+      var oldN = n;
+      n -= Math.floor(context.sampleRate*graphSizeInSamples/8000);  
+      if(n<0)
+        n=oldN;    
+      if(!playing)
+        draw();
+    }
 
 		var saveData = (function () {
 		    var a = document.createElement("a");
@@ -309,13 +353,24 @@
     
 
 		var draw = function(){
+      if(!pageNumDiv)   {
+        pageNumDiv = document.getElementById("pageNumber");
+      }    
+      if(!timeCodeDiv) {
+        timeCodeDiv = document.getElementById("timeCode");
+      }
+
 			var data = graphData.data;
 			var graphSizeInSamples = (data.length>>2);
 			var currentSample = Math.floor(8000*n/context.sampleRate);
 			var deltaTime = Math.floor( 8000 * (bufferSize) / context.sampleRate );
 			var heightInSamples = canvas.height;
-      var page = Math.floor( currentSample / graphSizeInSamples );
+      page = Math.floor( currentSample / graphSizeInSamples );
       var numSamples = data.length>>2;
+
+      pageNumDiv.innerText = page;
+      timeCodeDiv.innerText = (n/context.sampleRate).toFixed(2);
+
 			if( funcChanged || ( lastPage != page ) ){
         
         //console.log(`currentSample=${currentSample} 0<=t<${numSamples} deltaTime=${deltaTime}` );
@@ -460,9 +515,9 @@
        		//window.location = URL.createObjectURL(blob);
      	};
 
-
+      refeshCalc();
      	scriptNode.connect(dest);
-		refeshCalc();
+		
 		
 		</script>
 	</body>
