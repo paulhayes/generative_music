@@ -85,7 +85,7 @@
 	</head>
 	<body>
 		<div id="code" class="middle">
-			<div id="input" contenteditable value="t*((t>>9|t>>13)&25&t>>6)" >return (t&(t>>6)+(t<<((t>>11)^((t>>13)+3))|((t>>14%64)+(t>>14)))&(-t>>5));</div>
+			<div id="input" contenteditable="true" >return (t&(t>>6)+(t&lt;&lt;((t>>11)^((t>>13)+3))|((t>>14%64)+(t>>14)))&(-t>>5)); /* Track Crafty by Paul Hayes */</div>
 		    <p>
           <button onclick="prevPage()"><i class="material-icons">navigate_before</i></button>
           <button onclick="play()"><i id="play_icon" class="material-icons">play_arrow</i></button>
