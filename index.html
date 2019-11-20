@@ -156,6 +156,13 @@
 			var floor = Math.floor;
 
 
+    var updateTitle = function(){
+      /* get title */
+      var titleMatch = inputElement.innerText.match("\\/\\*(.*?)\\*\\/");
+      if( titleMatch && titleMatch.length==2 ){
+        document.title = "8-bit Generative Composer : " + titleMatch[1];
+      }
+    }
 
 		$(document).ready(function() {
 			$('.more_button').click(function(){ $('.more').slideToggle(); });
@@ -195,6 +202,8 @@
 			inputElement.innerText = code;
 		}
 
+    updateTitle();
+    
 		// shim layer with setTimeout fallback
 		window.requestAnimFrame = (function(){
 		return  window.requestAnimationFrame       || 
@@ -294,8 +303,10 @@
 			//var d = graphData.data;
 			//ctx.putImageData(graphData,0,0);
 			draw();
-
+      updateTitle();
 		}
+
+    
 
 		var draw = function(){
 			var data = graphData.data;
