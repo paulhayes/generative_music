@@ -191,7 +191,7 @@
 		var errorElement = document.getElementById("error");
 
 		// Start off by initializing a new context.
-		context = new (window.AudioContext || window.webkitAudioContext)();
+		context = new (window.AudioContext || window.webkitAudioContext)({sampleRate:44100});
 		canvas = document.getElementById("graph");
 		var ctx = canvas.getContext('2d');
 		var graphData = ctx.createImageData(canvas.width, canvas.height);
@@ -474,17 +474,7 @@
 	    		else if( lastSample != resampledTime ){
 	    			var o = f(resampledTime);
 	    			lastRawOutput = o%256;
-		    		lastOutput = outputData[i] = ((o%256)-128)/256;
-		    		
-		    		/*
-		    		var graphPos = samplePos2graph(resampledTime);
-		    		var lastPos = samplePos2graph(resampledTime-deltaTime);
-		    		if( lastPos >= 0 ){
-			    		data[lastPos] = data[lastPos+1];
-
-		    		}
-		    		data[graphPos] = 255;
-		    		*/
+		    		lastOutput = outputData[i] = ((o%256)-128)/256;		    				    		
 	    		}
 	    		else {
 	    			outputData[i] = lastOutput;
@@ -493,16 +483,12 @@
 	    		wasZero &= ( lastRawOutput==0 );
 	    		
 	    		
-				lastSample = resampledTime;
-	    		//data[resampledTime<<2] = data[(resampledTime<<2)+1] = data[(resampledTime<<2)+2] = lastRawOutput;
+				  lastSample = resampledTime;
 	    		if( playing ){
 	    			n++;
     			}
 	    		
     		}
-			//var d = graphData.data;
-
-    		//console.log(outputData);
     		
 		}
 
