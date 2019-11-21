@@ -195,10 +195,15 @@
 		canvas = document.getElementById("graph");
 		var ctx = canvas.getContext('2d');
 		var graphData = ctx.createImageData(canvas.width, canvas.height);
-		var tmpGraphData = ctx.createImageData(canvas.width, canvas.height);
-		var tmpPixel = ctx.createImageData(1,1);
+		//var tmpPixel = ctx.createImageData(1,1);
+    var canvasWidth = canvas.width;
+    var canvasHeight = canvas.height;
 		
-		var n = 0;		
+    var graphDataBuffer = new ArrayBuffer(graphData.data.length);
+    var graphDataByteArray = new Uint8ClampedArray(graphDataBuffer);
+    var graphDataIntArray = new Uint32Array(graphDataBuffer);
+
+		var n = 0;
     var page = 0;
 		var playing = false;
 		var recording = false;
@@ -311,7 +316,7 @@
 		}());
 
      	var samplePos2graph = function(i){
-     		return ( canvas.width*(i%canvas.height)+Math.floor(i/canvas.height) )<<2;
+     		return ( canvasWidth*(i%canvasHeight)+Math.floor(i/canvasHeight) );
      	}
 
 
@@ -351,7 +356,7 @@
 		}
 
     
-
+    var lastDrawStartSample = -1;
 		var draw = function(){
       if(!pageNumDiv)   {
         pageNumDiv = document.getElementById("pageNumber");
@@ -360,33 +365,39 @@
         timeCodeDiv = document.getElementById("timeCode");
       }
 
-			var data = graphData.data;
-			var graphSizeInSamples = (data.length>>2);
+			//var data = graphData.data;
+			var graphSizeInSamples = graphDataIntArray.length;
 			var currentSample = Math.floor(8000*n/context.sampleRate);
 			var deltaTime = Math.floor( 8000 * (bufferSize) / context.sampleRate );
-			var heightInSamples = canvas.height;
+			var heightInSamples = canvasHeight;
+      var updateImage = false;
       page = Math.floor( currentSample / graphSizeInSamples );
-      var numSamples = data.length>>2;
-
+      
       pageNumDiv.innerText = page;
       timeCodeDiv.innerText = (n/context.sampleRate).toFixed(2);
 
 			if( funcChanged || ( lastPage != page ) ){
         
-        //console.log(`currentSample=${currentSample} 0<=t<${numSamples} deltaTime=${deltaTime}` );
-        
-				for(var t=0;t<numSamples;t++){
+        for(var t=0;t<graphSizeInSamples;t++){
           var i = t<<2;
 					var pos = samplePos2graph(t);
 					var sample = t + ( graphSizeInSamples * page );
-					data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
-					data[pos+3] = 255;
+					
+          //data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
+					let value =  f(sample)%256;
+          graphDataIntArray[pos] = 
+            (255   << 24) |    // alpha
+            (value << 16) |    // blue
+            (value <<  8) |    // green
+             value;            // red
+          
 					if(sample < currentSample && currentSample < (sample+heightInSamples)){
-						data[pos] = 255;
+						graphDataIntArray[pos] |= 255;
 					}
           
 				}
 
+        updateImage = true;
 				funcChanged = false;
 				lastPage = page;
 			}
@@ -394,23 +405,40 @@
         var sampleInGraph = Math.floor(currentSample%graphSizeInSamples);
         var startSample = heightInSamples*Math.floor(-2 + sampleInGraph/heightInSamples );
         var endSample = heightInSamples*Math.ceil(sampleInGraph/heightInSamples);
+        if(lastDrawStartSample==startSample){
+          endSample = startSample;
+        } 
+        else {
+          updateImage = true;
+        }
+        lastDrawStartSample = startSample;
         //console.log(`currentSample=${currentSample} sampleInGraph=${sampleInGraph} ${startSample}<=t<${endSample} deltaTime=${deltaTime}` );
         for(var t=startSample;t<endSample;t++){
           
           var i = t<<2;
           var pos = samplePos2graph(t);
           var sample = t + ( graphSizeInSamples * page );
-					data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
-					data[pos+3] = 255;
-					if(sample < currentSample && currentSample < (sample+heightInSamples)){
-						data[pos] = 255;
+					//data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
+					//data[pos+3] = 255;
+          let value =  f(sample)%256;
+					graphDataIntArray[pos] = 
+            (255   << 24) |    // alpha
+            (value << 16) |    // blue
+            (value <<  8) |    // green
+             value;            // red
+          
+          if(sample < currentSample && currentSample < (sample+heightInSamples)){
+						graphDataIntArray[pos] |= 255;
 					} 
           
           
         }
       }
 
-      ctx.putImageData(graphData,0,0);
+      if(updateImage){
+        graphData.data.set(graphDataByteArray);
+        ctx.putImageData(graphData,0,0);
+      }
 			
 
 			
