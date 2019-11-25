@@ -92,9 +92,12 @@
           <button onclick="stop()"><i id="play_icon" class="material-icons">stop</i></button>
           <button onclick="rec()" style="color:#f00"><i id="play_icon" class="material-icons">fiber_manual_record</i></button>
           <button onclick="nextPage()"><i id="play_icon" class="material-icons">navigate_next</i></button>
+          <button onclick="copyLinkToClipboard(event)"><i class="material-icons">link</i></button>
           <span style="display: none;" id="pageNumber"></span> time=<span id="timeCode"></span>
         </p>
 			<div id="error" class="errors">
+      </div>
+      <div id="msg" class="msg">
 			</div>
 			<canvas id="graph" width="1000" height="256">
 
@@ -279,6 +282,17 @@
 			}
       updatePlayIcon
 		}
+
+    var copyLinkToClipboard = function(event){      
+      var msg = $('#msg');
+      msg.hide();
+      msg.text("Link to track copied to clipboard");
+      navigator.clipboard.writeText(location.href);
+      msg.slideDown();
+      setTimeout(function(){
+        msg.slideUp();
+      },2000);
+    }
 
     var nextPage = function(){      
       var graphSizeInSamples = (graphData.data.length>>2);
