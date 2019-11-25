@@ -214,8 +214,9 @@
 		// Start off by initializing a new context.
 		context = new (window.AudioContext || window.webkitAudioContext)({sampleRate:44100});
 		canvas = document.getElementById("graph");
-		var ctx = canvas.getContext('2d');
-		var graphData = ctx.createImageData(canvas.width, canvas.height);
+    var ctx = canvas.getContext('2d');
+		
+    var graphData = ctx.createImageData(canvas.width, canvas.height);
 		//var tmpPixel = ctx.createImageData(1,1);
     var canvasWidth = canvas.width;
     var canvasHeight = canvas.height;
@@ -313,14 +314,14 @@
     }
 
     var nextPage = function(){      
-      var graphSizeInSamples = (graphData.data.length>>2);
+      var graphSizeInSamples = graphDataIntArray.length;
       n += Math.floor(context.sampleRate*graphSizeInSamples/sampleRate);
       if(!playing)
         draw();
     }
 
     var prevPage = function(){
-      var graphSizeInSamples = (graphData.data.length>>2);
+      var graphSizeInSamples = graphDataIntArray.length;
       var oldN = n;
       n -= Math.floor(context.sampleRate*graphSizeInSamples/sampleRate);  
       if(n<0)
@@ -351,6 +352,10 @@
      		return ( canvasWidth*(i%canvasHeight)+Math.floor(i/canvasHeight) );
      	}
 
+       var graphPos2sample = function(pos){
+        return pos.x*canvasHeight+pos.y;
+       }
+
 
 		var silentFunc = function(){ return 0; };
 		var f = silentFunc;
@@ -360,7 +365,8 @@
 		var chunks = [];
 		var lastPage = 0;
 		var funcChanged = true;
-		bufferNode.loop = true;
+		var playPositionChanged = false;
+    bufferNode.loop = true;
 		bufferNode.start();
 		
 		var refeshCalc = function(e){
@@ -407,7 +413,7 @@
       
       pageNumDiv.innerText = page;
       timeCodeDiv.innerText = (n/context.sampleRate).toFixed(2);
-      var changed = funcChanged || ( lastPage != page );
+      var changed = funcChanged || ( lastPage != page ) || playPositionChanged;
 			if( playing || changed ){
         var startSample = 0;
         var endSample = graphSizeInSamples;
@@ -415,7 +421,6 @@
         if(changed){
           startSample = currentSample-(currentSample%heightInSamples);
           endSample = currentSample+heightInSamples-(currentSample%heightInSamples);
-
         }
 
 
@@ -438,55 +443,18 @@
           //graphDataIntArray[pos] = 0xff | 0xff<<24;
           
 				}
-
+        lastDrawStartSample = startSample;
         updateImage = true;
 				funcChanged = false;
+        playPositionChanged = false;
 				lastPage = page;
-			}
-      else if(playing){
-        if(lastDrawStartSample==startSample){
-          endSample = startSample;
-        } 
-        else {
-          updateImage = true;
-        }
-        //console.log(`currentSample=${currentSample} sampleInGraph=${sampleInGraph} ${startSample}<=t<${endSample} deltaTime=${deltaTime}` );
-        var lastDrawEndSample = lastDrawStartSample+heightInSamples;
-        for(var t=lastDrawStartSample;t<lastDrawEndSample;t++){
-          var pos = samplePos2graph(t);
-          var col = graphDataIntArray[pos];
-          graphDataByteArray[pos<<2] = graphDataByteArray[(pos<<2) + 1];
-        }
-        
-        for(var t=startSample;t<endSample;t++){
-          
-          var i = t<<2;
-          var pos = samplePos2graph(t);
-          var sample = t + ( graphSizeInSamples * page );
-					//data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
-					//data[pos+3] = 255;
-          let value =  f(sample)&255;
-					graphDataIntArray[pos] = 
-            (255   << 24) |    // alpha
-            (value << 16) |    // blue
-            (value <<  8) |    // green
-             value;            // red
-          
-          //if(sample < currentSample && currentSample < (sample+heightInSamples)){
-						graphDataIntArray[pos] |= 255;
-					//} 
-          
-          
-        }
-        lastDrawStartSample = startSample;
-        
-      }
 
-      if(updateImage){
-        graphData.data.set(graphDataByteArray);
-        ctx.putImageData(graphData,0,0);
-      }
-			
+        if(updateImage){
+          graphData.data.set(graphDataByteArray);
+          ctx.putImageData(graphData,0,0);
+        }
+			}
+      
 
 			
 		}
@@ -495,6 +463,17 @@
 		input.addEventListener("onkeyup", refeshCalc );
 		input.addEventListener("input", refeshCalc );
 
+    canvas.addEventListener('click', (e) => {
+      const pos = {
+        x: e.clientX - canvas.offsetLeft,
+        y: e.clientY - canvas.offsetTop
+      };
+      var sample = graphPos2sample(pos);
+      var graphSizeInSamples = graphDataIntArray.length;
+      n = context.sampleRate * (sample+page*graphSizeInSamples) / sampleRate;
+      playPositionChanged = true;
+      draw();
+    });
 
 		scriptNode.onaudioprocess = function(e){
 			var channel = 0;
@@ -546,7 +525,7 @@
      	var mediaRecorder = new MediaRecorder(dest.stream);
      	mediaRecorder.ondataavailable = function(evt) {
    			// push each chunk (blobs) in an array
-   			console.log("ondataavailable");
+   			//console.log("ondataavailable");
    			chunks.push(evt.data);
      	};
  		mediaRecorder.onstop = function(evt) {
