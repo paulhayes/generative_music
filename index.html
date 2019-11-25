@@ -407,9 +407,18 @@
       
       pageNumDiv.innerText = page;
       timeCodeDiv.innerText = (n/context.sampleRate).toFixed(2);
+      var changed = funcChanged || ( lastPage != page );
+			if( playing || changed ){
+        var startSample = 0;
+        var endSample = graphSizeInSamples;
 
-			if( funcChanged || ( lastPage != page ) ){
-        
+        if(changed){
+          startSample = currentSample-(currentSample%heightInSamples);
+          endSample = currentSample+heightInSamples-(currentSample%heightInSamples);
+
+        }
+
+
         for(var t=0;t<graphSizeInSamples;t++){
           var i = t<<2;
 					var pos = samplePos2graph(t);
@@ -435,9 +444,6 @@
 				lastPage = page;
 			}
       else if(playing){
-        var sampleInGraph = Math.floor(currentSample%graphSizeInSamples);
-        var startSample = currentSample-(currentSample%heightInSamples);
-        var endSample = currentSample+heightInSamples-(currentSample%heightInSamples);
         if(lastDrawStartSample==startSample){
           endSample = startSample;
         } 
