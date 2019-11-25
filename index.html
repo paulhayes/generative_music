@@ -205,7 +205,7 @@
 			$('.commands_button').click(function(){ $('.commands').slideToggle(); });
 			$('.commands').hide();
 			$('.more').hide();
-      $('#msg').hide();
+      $('#msgg').hide();
 		});
 
 		var inputElement = document.getElementById("input");
@@ -416,7 +416,7 @@
 					var sample = t + ( graphSizeInSamples * page );
 					
           //data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
-					let value =  f(sample)%256;
+					let value =  f(sample)&255;
           graphDataIntArray[pos] = 
             (255   << 24) |    // alpha
             (value << 16) |    // blue
@@ -426,6 +426,7 @@
 					if(sample < currentSample && currentSample < (sample+heightInSamples)){
 						graphDataIntArray[pos] |= 255;
 					}
+          //graphDataIntArray[pos] = 0xff | 0xff<<24;
           
 				}
 
@@ -435,16 +436,22 @@
 			}
       else if(playing){
         var sampleInGraph = Math.floor(currentSample%graphSizeInSamples);
-        var startSample = heightInSamples*Math.floor(-2 + sampleInGraph/heightInSamples );
-        var endSample = heightInSamples*Math.ceil(sampleInGraph/heightInSamples);
+        var startSample = currentSample-(currentSample%heightInSamples);
+        var endSample = currentSample+heightInSamples-(currentSample%heightInSamples);
         if(lastDrawStartSample==startSample){
           endSample = startSample;
         } 
         else {
           updateImage = true;
         }
-        lastDrawStartSample = startSample;
         //console.log(`currentSample=${currentSample} sampleInGraph=${sampleInGraph} ${startSample}<=t<${endSample} deltaTime=${deltaTime}` );
+        var lastDrawEndSample = lastDrawStartSample+heightInSamples;
+        for(var t=lastDrawStartSample;t<lastDrawEndSample;t++){
+          var pos = samplePos2graph(t);
+          var col = graphDataIntArray[pos];
+          graphDataByteArray[pos<<2] = graphDataByteArray[(pos<<2) + 1];
+        }
+        
         for(var t=startSample;t<endSample;t++){
           
           var i = t<<2;
@@ -452,19 +459,21 @@
           var sample = t + ( graphSizeInSamples * page );
 					//data[pos] = data[pos+1] = data[pos+2] = f(sample)%256;
 					//data[pos+3] = 255;
-          let value =  f(sample)%256;
+          let value =  f(sample)&255;
 					graphDataIntArray[pos] = 
             (255   << 24) |    // alpha
             (value << 16) |    // blue
             (value <<  8) |    // green
              value;            // red
           
-          if(sample < currentSample && currentSample < (sample+heightInSamples)){
+          //if(sample < currentSample && currentSample < (sample+heightInSamples)){
 						graphDataIntArray[pos] |= 255;
-					} 
+					//} 
           
           
         }
+        lastDrawStartSample = startSample;
+        
       }
 
       if(updateImage){
@@ -505,8 +514,8 @@
 	    		}
 	    		else if( lastSample != resampledTime ){
 	    			var o = f(resampledTime);
-	    			lastRawOutput = o%256;
-		    		lastOutput = outputData[i] = ((o%256)-128)/256;		    				    		
+	    			lastRawOutput = o&255;
+		    		lastOutput = outputData[i] = ((o&255)-128)/256;		    				    		
 	    		}
 	    		else {
 	    			outputData[i] = lastOutput;
