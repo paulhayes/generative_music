@@ -24,10 +24,14 @@
 		}
 		
 		a,
-		a:visited
+		a:visited,
+    .commands_button,
+    .more_button
 		{
 			color:#FCC33D;
 		}
+
+    
 		
 		#input {
 			border: 2px solid white;
@@ -52,6 +56,10 @@
 		#error {
 			color: #F92672;
 		}
+
+    #msg {
+      margin:20px;
+    }
 		
 		#graph {
 			height:256px;
@@ -80,7 +88,10 @@
        padding:2px 0 0 0;
     }
 
-
+    select {
+      font-size:12pt;			
+			font-family:Courier, Sans, sans-serif;      
+    }
 	</style>
 	</head>
 	<body>
@@ -105,9 +116,10 @@
 
 		</div>
 		<div class="middle">
-			<div class="commands_button">commands:</div>
+			<div class="commands_button">Commands</div>
 			<div class="commands">
-				
+        
+        
 				<dt>Pentatonic tuning ratios</dt>
 				<dd>A(t) = 1</dd>
 				<dd>C(t) = 32/27</dd>
@@ -115,7 +127,8 @@
 				<dd>E(t) = 3/2</dd>
 				<dd>G(t) = 16/9</dd>
 				<br/>
-				<dt>Functions</dt>
+        <dt>Functions</dt>
+        <dd>setFreq(f), sets sample frequency 8000&lt;f&lt;48000</dd>
 				<dd>floor(v)</dd>
 				<dd>abs(v)</dd>
 				<dd>zigzag(time,frequency)</dd>
@@ -124,7 +137,7 @@
 				<dd>beats(time,notePattern[,length=8])</dd>
 
 			</div>
-			<div class="more_button">more info:</div>
+			<div class="more_button">More info</div>
 			<div class="more">
 				<a href="http://countercomplex.blogspot.com/2011/10/algorithmic-symphonies-from-one-line-of.html">Inspired by the work of @viznut</a>. 
 				For great examples <a href="http://www.youtube.com/watch?v=GtQdIYUtAHg&feature=feedlik">watch these vids</a>
@@ -140,6 +153,10 @@
 			D = function(t){ return t*4/3; },
 			E = function(t){ return t*3/2; },
 			G = function(t){ return t*16/9; };
+
+      setFreq = function(rate){
+        sampleRate = rate;
+      }
 
 			odd = function(t){
 				return (t&1)!=0;
@@ -173,7 +190,7 @@
 
 			var abs = Math.abs;
 			var floor = Math.floor;
-
+      var sampleRate = 8000;
 
     var updateTitle = function(){
       /* get title */
@@ -188,6 +205,7 @@
 			$('.commands_button').click(function(){ $('.commands').slideToggle(); });
 			$('.commands').hide();
 			$('.more').hide();
+      $('#msg').hide();
 		});
 
 		var inputElement = document.getElementById("input");
@@ -296,7 +314,7 @@
 
     var nextPage = function(){      
       var graphSizeInSamples = (graphData.data.length>>2);
-      n += Math.floor(context.sampleRate*graphSizeInSamples/8000);
+      n += Math.floor(context.sampleRate*graphSizeInSamples/sampleRate);
       if(!playing)
         draw();
     }
@@ -304,7 +322,7 @@
     var prevPage = function(){
       var graphSizeInSamples = (graphData.data.length>>2);
       var oldN = n;
-      n -= Math.floor(context.sampleRate*graphSizeInSamples/8000);  
+      n -= Math.floor(context.sampleRate*graphSizeInSamples/sampleRate);  
       if(n<0)
         n=oldN;    
       if(!playing)
@@ -381,8 +399,8 @@
 
 			//var data = graphData.data;
 			var graphSizeInSamples = graphDataIntArray.length;
-			var currentSample = Math.floor(8000*n/context.sampleRate);
-			var deltaTime = Math.floor( 8000 * (bufferSize) / context.sampleRate );
+			var currentSample = Math.floor(sampleRate*n/context.sampleRate);
+			var deltaTime = Math.floor( sampleRate * (bufferSize) / context.sampleRate );
 			var heightInSamples = canvasHeight;
       var updateImage = false;
       page = Math.floor( currentSample / graphSizeInSamples );
@@ -471,7 +489,7 @@
     		var lastRawOutput = 0;
     		var data = graphData.data;
     		
-    		var deltaTime = Math.floor( 8000 * (outputData.length) / context.sampleRate );
+    		var deltaTime = Math.floor( sampleRate * (outputData.length) / context.sampleRate );
 
 			draw();    	
 
@@ -480,7 +498,7 @@
     		for(var i=0;i<outputData.length;i++){
 				//console.log( i );
 
-	    		var resampledTime = Math.floor( 8000 * n / context.sampleRate );
+	    		var resampledTime = Math.floor( sampleRate * n / context.sampleRate );
 	    		var t = resampledTime;
 	    		if( !playing ){
 	    			outputData[i] = 0;
